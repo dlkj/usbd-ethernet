@@ -2,10 +2,33 @@ version: 0.2
 dictionaries:
   - softwareTerms
 words:
+  - addrs
   - datagram
-  - Datagrams
+  - datagrams
+  - deconfigured
   - defmt
+  - dhcpv
+  - dlkj
+  - dpram
+  - eabi
+  - gpio
   - heapless
-  - NCMH
+  - iface
+  - ncmh
+  - notif
+  - onclick
+  - pico
+  - plls
+  - println
+  - regs
+  - repr
+  - rosc
+  - rustc
+  - rustup
   - smoltcp
+  - thumbv
+  - toggleable
+  - usbctrl
   - usbd
+  - xosc
+  - xtal

@@ -62,7 +62,7 @@ pub struct Speed {
     pub download_bit_rate: u32,
 }
 
-pub struct CdcNcmClass<'a, B: UsbBus> {
+pub struct Ethernet<'a, B: UsbBus> {
     comm_if: InterfaceNumber,
     comm_ep: EndpointIn<'a, B>,
     data_if: InterfaceNumber,
@@ -70,24 +70,24 @@ pub struct CdcNcmClass<'a, B: UsbBus> {
     mac_address_idx: StringIndex,
     state: DeviceState,
     request_state: HostNotificationState,
-    ncm_in: NcmIn<'a, B>,
-    ncm_out: NcmOut<'a, B>,
+    in_buf: InBuf<'a, B>,
+    out_buf: OutBuf<'a, B>,
     connection_speed: Option<Speed>,
 }
 
-struct NcmIn<'a, B: UsbBus> {
+struct InBuf<'a, B: UsbBus> {
     write_ep: EndpointIn<'a, B>,
     buffer: RWBuffer<'a, NTB_MAX_SIZE_USIZE>,
     next_seq: u16,
 }
 
-struct NcmOut<'a, B: UsbBus> {
+struct OutBuf<'a, B: UsbBus> {
     read_ep: EndpointOut<'a, B>,
     buffer: RWBuffer<'a, NTB_MAX_SIZE_USIZE>,
     datagram_len: Option<usize>,
 }
 
-impl<'a, B: UsbBus> CdcNcmClass<'a, B> {
+impl<'a, B: UsbBus> Ethernet<'a, B> {
     pub fn new(
         alloc: &'a UsbBusAllocator<B>,
         mac_address: [u8; 6],
@@ -105,12 +105,12 @@ impl<'a, B: UsbBus> CdcNcmClass<'a, B> {
             mac_address_idx,
             state: DeviceState::Disabled,
             request_state: HostNotificationState::Complete,
-            ncm_in: NcmIn {
+            in_buf: InBuf {
                 write_ep: alloc.bulk(max_packet_size),
                 buffer: RWBuffer::new(in_buffer),
                 next_seq: 0,
             },
-            ncm_out: NcmOut {
+            out_buf: OutBuf {
                 read_ep: alloc.bulk(max_packet_size),
                 buffer: RWBuffer::new(out_buffer),
                 datagram_len: None,
@@ -130,8 +130,8 @@ impl<'a, B: UsbBus> CdcNcmClass<'a, B> {
     fn network_connection_notification(&mut self, connect: bool) -> Result<()> {
         const NOTE_TYPE_NETWORK_CONNECTION: u8 = 0x00;
 
-        if self.state != DeviceState::Disconnected {
-            warn!("ncm: device can't change connection state while disconnected",);
+        if self.state == DeviceState::Disabled {
+            warn!("ethernet: device can't change connection state while disabled",);
             return Err(UsbError::WouldBlock);
         }
 
@@ -151,9 +151,9 @@ impl<'a, B: UsbBus> CdcNcmClass<'a, B> {
 
         if result.is_ok() {
             if connect {
-                debug!("ncm: connecting");
+                debug!("ethernet: connecting");
             } else {
-                debug!("ncm: disconnecting");
+                debug!("ethernet: disconnecting");
             }
             self.request_state = HostNotificationState::InProgress(HostNotification::Connect);
         }
@@ -168,8 +168,8 @@ impl<'a, B: UsbBus> CdcNcmClass<'a, B> {
     ) -> Result<()> {
         const NOTE_TYPE_CONNECTION_SPEED_CHANGE: u8 = 0x2A;
 
-        if self.state != DeviceState::Disconnected {
-            warn!("ncm: device can't set connection speed while disconnected",);
+        if self.state == DeviceState::Disabled {
+            warn!("ethernet: device can't set connection speed while disabled",);
             return Err(UsbError::WouldBlock);
         }
 
@@ -196,16 +196,18 @@ impl<'a, B: UsbBus> CdcNcmClass<'a, B> {
                     upload_bit_rate,
                     download_bit_rate,
                 }));
-            debug!("ncm: setting connection speed");
+            debug!("ethernet: setting connection speed");
         }
 
         result.map(drop)
     }
 
+    #[must_use]
     pub fn connection_speed(&self) -> Option<Speed> {
         self.connection_speed
     }
 
+    #[must_use]
     pub fn state(&self) -> DeviceState {
         self.state
     }
@@ -224,7 +226,7 @@ fn mac_bytes_to_string(mac_address: [u8; 6]) -> String<12> {
     }
     s
 }
-impl<'a, B: UsbBus> NcmIn<'a, B> {
+impl<'a, B: UsbBus> InBuf<'a, B> {
     /// Writes a single packet into the IN endpoint.
     pub fn write_datagram<F, R>(&mut self, len: u16, f: F) -> Result<R>
     where
@@ -337,7 +339,7 @@ impl<'a, B: UsbBus> NcmIn<'a, B> {
     }
 }
 
-impl<'a, B: UsbBus> NcmOut<'a, B> {
+impl<'a, B: UsbBus> OutBuf<'a, B> {
     fn can_read(&mut self) -> bool {
         match self.read_packet() {
             Ok(_) => self.datagram_len.is_some(),
@@ -394,14 +396,14 @@ impl<'a, B: UsbBus> NcmOut<'a, B> {
             let mut data: &[u8] = data;
             let sig = data.get_slice(4);
             if sig != SIG_NTH {
-                warn!("ncm: received bad NTH sig.");
+                warn!("ethernet: received bad NTH sig.");
                 return Err(UsbError::ParseError);
             }
 
             data.advance(6); // wHeaderLength, wSequence, wBlockLength
             let Some(ndp_idx) = data.get_u16_le().map(usize::from)
             else{
-                warn!("ncm: NTH too short, unable to read ndp_idx");
+                warn!("ethernet: NTH too short, unable to read ndp_idx");
                 return Err(UsbError::ParseError);
             };
             assert!(!data.has_remaining());
@@ -424,14 +426,14 @@ impl<'a, B: UsbBus> NcmOut<'a, B> {
         match self.buffer.read(self.buffer.unread(), |data| {
             let Some(mut ntb_datagram_pointer) = data.get(ndp_offset..ndp_offset + NDP_LEN)
             else {
-                    warn!("ncm: NTB datagram pointer out of range or truncated");
+                    warn!("ethernet: NTB datagram pointer out of range or truncated");
                     return Err(UsbError::ParseError);
             };
 
             // wdSignature
             let sig = ntb_datagram_pointer.get_slice(4);
             if sig != SIG_NDP_NO_FCS && sig != SIG_NDP_WITH_FCS {
-                warn!("ncm: received bad NDP sig");
+                warn!("ethernet: received bad NDP sig");
                 return Err(UsbError::ParseError);
             }
 
@@ -439,18 +441,18 @@ impl<'a, B: UsbBus> NcmOut<'a, B> {
 
             let Some(datagram_index) = ntb_datagram_pointer.get_u16_le().map(usize::from)
             else{
-                warn!("ncm: NTB too short, unable to read datagram_index");
+                warn!("ethernet: NTB too short, unable to read datagram_index");
                 return Err(UsbError::ParseError);
             };
             let Some(datagram_len) = ntb_datagram_pointer.get_u16_le().map(usize::from)
             else{
-                warn!("ncm: NTB too short, unable to read datagram_len");
+                warn!("ethernet: NTB too short, unable to read datagram_len");
                 return Err(UsbError::ParseError);
             };
 
             if datagram_index == 0 || datagram_len == 0 {
                 // empty, ignore. This is allowed by the spec, so don't warn.
-                debug!("ncm: empty datagram");
+                debug!("ethernet: empty datagram");
                 return Err(UsbError::WouldBlock);
             }
 
@@ -460,7 +462,7 @@ impl<'a, B: UsbBus> NcmOut<'a, B> {
                 .get(datagram_offset..datagram_offset + datagram_len)
                 .is_none()
             {
-                warn!("ncm: NDP datagram pointer out of range");
+                warn!("ethernet: NDP datagram pointer out of range");
                 return Err(UsbError::ParseError);
             };
 
@@ -485,7 +487,7 @@ impl<'a, B: UsbBus> NcmOut<'a, B> {
     }
 }
 
-impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
+impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
     fn get_configuration_descriptors(&self, writer: &mut DescriptorWriter) -> Result<()> {
         const CDC_PROTOCOL_NONE: u8 = 0x00;
         const CDC_PROTOCOL_NTB: u8 = 0x01;
@@ -587,10 +589,10 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
 
         // Endpoint descriptors for Data Class Interface (interface n+1, alternate setting 1)
 
-        writer.endpoint(&self.ncm_in.write_ep)?;
-        writer.endpoint(&self.ncm_out.read_ep)?;
+        writer.endpoint(&self.in_buf.write_ep)?;
+        writer.endpoint(&self.out_buf.read_ep)?;
 
-        debug!("ncm: configuration descriptors written");
+        debug!("ethernet: configuration descriptors written");
 
         Ok(())
     }
@@ -608,7 +610,7 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
 
         if req.index == u16::from(u8::from(self.data_if)) {
             warn!(
-                "ncm: unhandled DATA_INTERFACE control_in {} {}",
+                "ethernet: unhandled DATA_INTERFACE control_in {} {}",
                 req.request_type, req.request
             );
             return;
@@ -616,7 +618,7 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
 
         if req.index != u16::from(u8::from(self.comm_if)) {
             warn!(
-                "ncm: control_in unexpected interface {} - {} {}",
+                "ethernet: control_in unexpected interface {} - {} {}",
                 req.index, req.request_type, req.request
             );
             return;
@@ -624,7 +626,7 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
 
         match (req.request_type, req.request) {
             (control::RequestType::Class, REQ_GET_NTB_PARAMETERS) => {
-                debug!("ncm: REQ_GET_NTB_PARAMETERS");
+                debug!("ethernet: REQ_GET_NTB_PARAMETERS");
                 let _: Result<()> = transfer.accept(|data| {
                     const LEN: u16 = 28;
                     if let Some(mut data) = data.get_mut(..LEN.into()) {
@@ -648,7 +650,7 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
                 });
             }
             (control::RequestType::Class, REQ_GET_NTB_INPUT_SIZE) => {
-                debug!("ncm: REQ_GET_NTB_INPUT_SIZE");
+                debug!("ethernet: REQ_GET_NTB_INPUT_SIZE");
                 let _: Result<()> = transfer.accept(|data| {
                     const LEN: usize = 4;
 
@@ -664,7 +666,7 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
             }
             _ => {
                 warn!(
-                    "ncm: unhandled COMMUNICATION interface control_in {} {}",
+                    "ethernet: unhandled COMMUNICATION interface control_in {} {}",
                     req.request_type, req.request
                 );
             }
@@ -685,7 +687,7 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
         if req.index == u16::from(u8::from(self.comm_if)) {
             match (req.request_type, req.request) {
                 (control::RequestType::Class, REQ_SET_NTB_INPUT_SIZE) => {
-                    debug!("ncm: REQ_SET_NTB_INPUT_SIZE");
+                    debug!("ethernet: REQ_SET_NTB_INPUT_SIZE");
                     // We only support the minimum NTB maximum size the value
                     // will always be NTB_MAX_SIZE
                     if let Some(ntb_input_size) = transfer.data().get_u32_le() {
@@ -703,7 +705,7 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
                 }
                 _ => {
                     warn!(
-                        "ncm: unhandled COMMUNICATION interface control_out {} {}",
+                        "ethernet: unhandled COMMUNICATION interface control_out {} {}",
                         req.request_type, req.request
                     );
                 }
@@ -714,14 +716,14 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
         if req.index == u16::from(u8::from(self.data_if)) {
             match (req.request_type, req.request) {
                 (control::RequestType::Standard, REQ_SET_INTERFACE) => {
-                    debug!("ncm: REQ_SET_INTERFACE");
+                    debug!("ethernet: REQ_SET_INTERFACE");
                     if req.value == 0 {
                         transfer.accept().ok();
                         self.state = DeviceState::Disabled;
-                        info!("ncm: data interface disabled");
+                        info!("ethernet: data interface disabled");
                         self.reset();
                     } else if req.value == 1 {
-                        info!("ncm: data interface enabled");
+                        info!("ethernet: data interface enabled");
                         self.state = DeviceState::Disconnected;
                         transfer.accept().ok();
                     } else {
@@ -731,7 +733,7 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
                 }
                 _ => {
                     warn!(
-                        "ncm: unhandled DATA_INTERFACE control_out {} {}",
+                        "ethernet: unhandled DATA_INTERFACE control_out {} {}",
                         req.request_type, req.request
                     );
                 }
@@ -740,7 +742,7 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
         }
 
         warn!(
-            "ncm: control_out unexpected interface {} - {} {}",
+            "ethernet: control_out unexpected interface {} - {} {}",
             req.index, req.request_type, req.request
         );
     }
@@ -752,18 +754,18 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
 
         match self.request_state {
             HostNotificationState::Complete => {
-                warn!("ncm: endpoint in completed when no request was in progress");
+                warn!("ethernet: endpoint in completed when no request was in progress");
             }
             HostNotificationState::InProgress(HostNotification::Connect) => {
-                info!("ncm: connected");
+                info!("ethernet: connected");
                 self.state = DeviceState::Connected;
             }
             HostNotificationState::InProgress(HostNotification::Disconnect) => {
-                info!("ncm: disconnected");
+                info!("ethernet: disconnected");
                 self.state = DeviceState::Disconnected;
             }
             HostNotificationState::InProgress(HostNotification::Speed(cs)) => {
-                info!("ncm: connection speed set");
+                info!("ethernet: connection speed set");
                 self.connection_speed = Some(cs);
             }
         }
@@ -774,25 +776,25 @@ impl<B: UsbBus> UsbClass<B> for CdcNcmClass<'_, B> {
         if index == self.mac_address_idx {
             Some(&self.mac_address)
         } else {
-            warn!("ncm: unknown string index requested {}", index);
+            warn!("ethernet: unknown string index requested {}", index);
             None
         }
     }
 
     fn reset(&mut self) {
-        info!("ncm: reset");
-        self.ncm_in.reset();
-        self.ncm_out.reset();
+        info!("ethernet: reset");
+        self.in_buf.reset();
+        self.out_buf.reset();
         self.state = DeviceState::Disabled;
         self.request_state = HostNotificationState::Complete;
         self.connection_speed = None;
     }
 }
 
-impl<'a, B: UsbBus> Device for CdcNcmClass<'a, B> {
-    type RxToken<'b> = NcmRxToken<'a, 'b, B> where
+impl<'a, B: UsbBus> Device for Ethernet<'a, B> {
+    type RxToken<'b> = EthernetRxToken<'a, 'b, B> where
     Self: 'b;
-    type TxToken<'b> = NcmTxToken<'a, 'b, B> where
+    type TxToken<'b> = EthernetTxToken<'a, 'b, B> where
     Self: 'b;
 
     fn receive(
@@ -800,12 +802,12 @@ impl<'a, B: UsbBus> Device for CdcNcmClass<'a, B> {
         _timestamp: smoltcp::time::Instant,
     ) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
         if self.state == DeviceState::Connected
-            && self.ncm_in.can_write()
-            && self.ncm_out.can_read()
+            && self.in_buf.can_write()
+            && self.out_buf.can_read()
         {
             Some((
-                NcmRxToken::new(&mut self.ncm_out),
-                NcmTxToken::new(&mut self.ncm_in),
+                EthernetRxToken::new(&mut self.out_buf),
+                EthernetTxToken::new(&mut self.in_buf),
             ))
         } else {
             None
@@ -813,8 +815,8 @@ impl<'a, B: UsbBus> Device for CdcNcmClass<'a, B> {
     }
 
     fn transmit(&mut self, _timestamp: smoltcp::time::Instant) -> Option<Self::TxToken<'_>> {
-        if self.state == DeviceState::Connected && self.ncm_in.can_write() {
-            Some(NcmTxToken::new(&mut self.ncm_in))
+        if self.state == DeviceState::Connected && self.in_buf.can_write() {
+            Some(EthernetTxToken::new(&mut self.in_buf))
         } else {
             None
         }
@@ -829,38 +831,40 @@ impl<'a, B: UsbBus> Device for CdcNcmClass<'a, B> {
     }
 }
 
-pub struct NcmRxToken<'a, 'b, B: UsbBus> {
-    ncm: &'b mut NcmOut<'a, B>,
+pub struct EthernetRxToken<'a, 'b, B: UsbBus> {
+    ethernet: &'b mut OutBuf<'a, B>,
 }
-impl<'a, 'b, B: UsbBus> NcmRxToken<'a, 'b, B> {
-    fn new(ncm: &'b mut NcmOut<'a, B>) -> Self {
-        Self { ncm }
+impl<'a, 'b, B: UsbBus> EthernetRxToken<'a, 'b, B> {
+    fn new(ethernet: &'b mut OutBuf<'a, B>) -> Self {
+        Self { ethernet }
     }
 }
 
-impl<'a, 'b, B: UsbBus> phy::RxToken for NcmRxToken<'a, 'b, B> {
+impl<'a, 'b, B: UsbBus> phy::RxToken for EthernetRxToken<'a, 'b, B> {
     fn consume<R, F>(self, f: F) -> R
     where
         F: FnOnce(&mut [u8]) -> R,
     {
-        self.ncm.read_datagram(f).unwrap()
+        self.ethernet.read_datagram(f).unwrap()
     }
 }
 
-pub struct NcmTxToken<'a, 'b, B: UsbBus> {
-    ncm: &'b mut NcmIn<'a, B>,
+pub struct EthernetTxToken<'a, 'b, B: UsbBus> {
+    ethernet: &'b mut InBuf<'a, B>,
 }
-impl<'a, 'b, B: UsbBus> NcmTxToken<'a, 'b, B> {
-    fn new(ncm: &'b mut NcmIn<'a, B>) -> Self {
-        Self { ncm }
+impl<'a, 'b, B: UsbBus> EthernetTxToken<'a, 'b, B> {
+    fn new(ethernet: &'b mut InBuf<'a, B>) -> Self {
+        Self { ethernet }
     }
 }
 
-impl<'a, 'b, B: UsbBus> phy::TxToken for NcmTxToken<'a, 'b, B> {
+impl<'a, 'b, B: UsbBus> phy::TxToken for EthernetTxToken<'a, 'b, B> {
     fn consume<R, F>(self, len: usize, f: F) -> R
     where
         F: FnOnce(&mut [u8]) -> R,
     {
-        self.ncm.write_datagram(len.try_into().unwrap(), f).unwrap()
+        self.ethernet
+            .write_datagram(len.try_into().unwrap(), f)
+            .unwrap()
     }
 }

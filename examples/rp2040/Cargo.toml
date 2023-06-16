@@ -1,0 +1,85 @@
+[package]
+edition = "2021"
+name = "usbd-ethernet-examples-rp2040"
+version = "0.1.0"
+license = "MIT"
+authors = ["Daniel Kenyon-Jones"]
+homepage = "https://github.com/dlkj/pico-networking"
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+embedded-hal = { version = "0.2.5", features = ["unproven"] }
+
+usb-device = { version = "0.2", features = ["defmt"] }
+heapless = { version = "0.7", features = ["defmt-impl"] }
+
+defmt = "0.3"
+defmt-rtt = "0.4"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+
+smoltcp = { version = "0.9.1", default-features = false, features = [
+    "defmt",
+    "socket-raw",
+    "socket-udp",
+    "socket-tcp",
+    "socket-icmp",
+    "socket-dhcpv4",
+    "socket-dns",
+    "proto-ipv4",
+    "proto-ipv6",
+] }
+rp-pico = { version = "0.7" }
+usbd-ethernet = { path = "../../" }
+
+# cargo build/run
+[profile.dev]
+codegen-units = 1
+debug = 2
+debug-assertions = true
+incremental = false
+opt-level = 3
+overflow-checks = true
+
+# cargo build/run --release
+[profile.release]
+codegen-units = 1
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 3
+overflow-checks = false
+
+# do not optimize proc-macro crates = faster builds from scratch
+[profile.dev.build-override]
+codegen-units = 8
+debug = false
+debug-assertions = false
+opt-level = 0
+overflow-checks = false
+
+[profile.release.build-override]
+codegen-units = 8
+debug = false
+debug-assertions = false
+opt-level = 0
+overflow-checks = false
+
+# cargo test
+[profile.test]
+codegen-units = 1
+debug = 2
+debug-assertions = true
+incremental = false
+opt-level = 3
+overflow-checks = true
+
+# cargo test --release
+[profile.bench]
+codegen-units = 1
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 3
