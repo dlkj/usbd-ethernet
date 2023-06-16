@@ -1,6 +1,6 @@
 [package]
 name = "usbd-ethernet"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Communication Device Class Network Control Model (CDC-NCM) class for usb-device"
 license = "MIT"
@@ -13,14 +13,9 @@ homepage = "https://github.com/dlkj/usbd-ethernet"
 [dependencies]
 smoltcp = { version = "0.9", default-features = false, features = [
     "defmt",
-    "socket-raw",
-    "socket-udp",
-    "socket-tcp",
-    "socket-icmp",
-    "socket-dhcpv4",
-    "socket-dns",
     "proto-ipv4",
-    "proto-ipv6",
+    "medium-ethernet",
+    "socket-udp",
 ] }
 defmt = "0.3"
 heapless = { version = "0.7", features = ["defmt-impl"] }
