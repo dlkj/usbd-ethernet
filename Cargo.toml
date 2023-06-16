@@ -1,0 +1,21 @@
+[package]
+name = "usbd-ethernet"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+smoltcp = { version = "0.9.1", default-features = false, features = [
+    "defmt",
+    "socket-raw",
+    "socket-udp",
+    "socket-tcp",
+    "socket-icmp",
+    "socket-dhcpv4",
+    "socket-dns",
+    "proto-ipv4",
+    "proto-ipv6",
+] }
+defmt = "0.3.4"
+heapless = { version = "0.7.16", features = ["defmt-impl"] }
+usb-device = { version = "0.2.9", features = ["defmt"] }

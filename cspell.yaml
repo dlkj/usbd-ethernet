@@ -1,0 +1,11 @@
+version: 0.2
+dictionaries:
+  - softwareTerms
+words:
+  - datagram
+  - Datagrams
+  - defmt
+  - heapless
+  - NCMH
+  - smoltcp
+  - usbd
