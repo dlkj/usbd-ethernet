@@ -1,6 +1,6 @@
 [package]
 name = "usbd-ethernet"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 description = "Communication Device Class Network Control Model (CDC-NCM) class for usb-device"
 license = "MIT"
@@ -11,12 +11,12 @@ authors = ["Daniel Kenyon-Jones"]
 homepage = "https://github.com/dlkj/usbd-ethernet"
 
 [dependencies]
-smoltcp = { version = "0.9", default-features = false, features = [
+smoltcp = { version = "0.11", default-features = false, features = [
     "defmt",
     "proto-ipv4",
     "medium-ethernet",
     "socket-udp",
 ] }
 defmt = "0.3"
-heapless = { version = "0.7", features = ["defmt-impl"] }
-usb-device = { version = "0.2", features = ["defmt"] }
+heapless = { version = "0.8", features = ["defmt-03"] }
+usb-device = { version = "0.3", features = ["defmt"] }
