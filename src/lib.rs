@@ -4,7 +4,6 @@
 #![warn(clippy::pedantic)]
 #![warn(clippy::style)]
 #![warn(clippy::cargo)]
-#![allow(clippy::multiple_crate_versions)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]

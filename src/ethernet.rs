@@ -517,6 +517,7 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
             USB_CLASS_CDC,
             CDC_SUBCLASS_NCM,
             CDC_PROTOCOL_NONE,
+            None,
         )?;
 
         // Communication Class Interface (interface n)
@@ -810,7 +811,7 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
         self.request_state = HostNotificationState::Complete;
     }
 
-    fn get_string(&self, index: StringIndex, _lang_id: u16) -> Option<&str> {
+    fn get_string(&self, index: StringIndex, _lang_id: LangID) -> Option<&str> {
         if index == self.mac_address_idx {
             Some(&self.mac_address)
         } else {
