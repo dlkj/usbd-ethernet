@@ -157,12 +157,12 @@ fn usb_poll<B: UsbBus>(usb_dev: &mut UsbDevice<B>, cdc_ethernet: &mut Ethernet<B
         if cdc_ethernet.connection_speed().is_none() {
             // 1000 Kps upload and download
             match cdc_ethernet.set_connection_speed(1_000_000, 1_000_000) {
-                Ok(_) | Err(UsbError::WouldBlock) => {}
+                Ok(()) | Err(UsbError::WouldBlock) => {}
                 Err(e) => error!("Failed to set connection speed: {}", e),
             }
         } else if cdc_ethernet.state() == DeviceState::Disconnected {
             match cdc_ethernet.connect() {
-                Ok(_) | Err(UsbError::WouldBlock) => {}
+                Ok(()) | Err(UsbError::WouldBlock) => {}
                 Err(e) => error!("Failed to connect: {}", e),
             }
         }
