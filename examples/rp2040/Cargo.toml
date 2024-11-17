@@ -9,7 +9,7 @@ homepage = "https://github.com/dlkj/pico-networking"
 [dependencies]
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
-embedded-hal = { version = "0.2.5", features = ["unproven"] }
+embedded-hal = { version = "1.0.0", features = ["unproven"] }
 
 usb-device = { version = "0.2", features = ["defmt"] }
 heapless = { version = "0.7", features = ["defmt-impl"] }
