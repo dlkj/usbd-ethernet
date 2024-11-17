@@ -4,6 +4,8 @@
 #![warn(clippy::pedantic)]
 #![warn(clippy::style)]
 #![warn(clippy::cargo)]
+// Remove this once defmt releases v0.3.9
+#![allow(clippy::multiple_crate_versions)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
