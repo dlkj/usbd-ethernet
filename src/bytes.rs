@@ -33,6 +33,7 @@ pub(crate) trait Buf {
 
     fn get_slice(&mut self, size: usize) -> &[u8];
 
+    #[allow(dead_code)]
     fn get_u8(&mut self) -> Option<u8> {
         const SIZE: usize = core::mem::size_of::<u8>();
         let value = self.chunk().first().copied()?;

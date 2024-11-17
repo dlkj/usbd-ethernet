@@ -25,7 +25,7 @@ smoltcp = { version = "0.9.1", default-features = false, features = [
     "proto-ipv4",
 ] }
 rp-pico = { version = "0.7" }
-usbd-ethernet = { path = "../../" }
+usbd-ethernet = { path = "../../", features = ["defmt"] }
 
 # cargo build/run
 [profile.dev]
