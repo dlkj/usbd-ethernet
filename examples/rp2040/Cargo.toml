@@ -12,7 +12,7 @@ cortex-m-rt = "0.7"
 embedded-hal = { version = "0.2.5", features = ["unproven"] }
 
 usb-device = { version = "0.2", features = ["defmt"] }
-heapless = { version = "0.7", features = ["defmt-impl"] }
+heapless = { version = "0.8", features = ["defmt-impl"] }
 
 defmt = "0.3"
 defmt-rtt = "0.4"
