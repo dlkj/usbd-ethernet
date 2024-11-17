@@ -9,22 +9,22 @@ homepage = "https://github.com/dlkj/pico-networking"
 [dependencies]
 cortex-m = "0.7"
 cortex-m-rt = "0.7"
-embedded-hal = { version = "0.2.5", features = ["unproven"] }
+embedded-hal = { version = "1.0" }
 
-usb-device = { version = "0.2", features = ["defmt"] }
-heapless = { version = "0.7", features = ["defmt-impl"] }
+usb-device = { version = "0.3", features = ["defmt"] }
+heapless = { version = "0.8", features = ["defmt-03"] }
 
 defmt = "0.3"
 defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 
-smoltcp = { version = "0.9.1", default-features = false, features = [
+smoltcp = { version = "0.11", default-features = false, features = [
     "defmt",
     "socket-tcp",
     "socket-dhcpv4",
     "proto-ipv4",
 ] }
-rp-pico = { version = "0.7" }
+rp-pico = { version = "0.9" }
 usbd-ethernet = { path = "../../", features = ["defmt"] }
 
 # cargo build/run

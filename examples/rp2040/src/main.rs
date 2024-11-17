@@ -49,17 +49,6 @@ fn main() -> ! {
     let mut pac = pac::Peripherals::take().unwrap();
 
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
-    let timer = Timer::new(pac.TIMER, &mut pac.RESETS);
-    let ring_oscillator = RingOscillator::new(pac.ROSC);
-    let sio = hal::Sio::new(pac.SIO);
-
-    // Set the pins up according to their function on this particular board
-    let pins = rp_pico::Pins::new(
-        pac.IO_BANK0,
-        pac.PADS_BANK0,
-        sio.gpio_bank0,
-        &mut pac.RESETS,
-    );
     let clocks = init_clocks_and_plls(
         bsp::XOSC_CRYSTAL_FREQ,
         pac.XOSC,
@@ -71,6 +60,18 @@ fn main() -> ! {
     )
     .ok()
     .unwrap();
+
+    let timer = Timer::new(pac.TIMER, &mut pac.RESETS, &clocks);
+    let ring_oscillator = RingOscillator::new(pac.ROSC);
+    let sio = hal::Sio::new(pac.SIO);
+
+    // Set the pins up according to their function on this particular board
+    let pins = rp_pico::Pins::new(
+        pac.IO_BANK0,
+        pac.PADS_BANK0,
+        sio.gpio_bank0,
+        &mut pac.RESETS,
+    );
 
     let led_pin = pins.led.into_push_pull_output();
 
@@ -91,18 +92,23 @@ fn main() -> ! {
         ETHERNET_OUT_BUFFER,
     );
     let mut usb_dev = UsbDeviceBuilder::new(&usb_alloc, UsbVidPid(0x1209, 0x0004))
-        .manufacturer("dlkj")
-        .product("usbd-ethernet")
-        .serial_number("TEST")
+        .strings(&[StringDescriptors::default()
+            .manufacturer("dlkj")
+            .product("usbd-ethernet")
+            .serial_number("TEST")])
+        .unwrap()
         .device_class(usbd_ethernet::USB_CLASS_CDC)
         .build();
 
-    let mut interface_config = Config::new();
-    interface_config.hardware_addr = Some(EthernetAddress(DEVICE_MAC_ADDR).into());
+    let mut interface_config = Config::new(EthernetAddress(DEVICE_MAC_ADDR).into());
     let ring_oscillator = ring_oscillator.initialize();
     interface_config.random_seed = get_random_seed(&ring_oscillator);
 
-    let mut interface = Interface::new(interface_config, &mut ethernet);
+    let mut interface = Interface::new(
+        interface_config,
+        &mut ethernet,
+        Instant::from_micros(i64::try_from(timer.get_counter().ticks()).unwrap()),
+    );
     interface.update_ip_addrs(|ip_addrs| {
         ip_addrs
             .push(Ipv4Cidr::new(Ipv4Address::UNSPECIFIED, 0).into())
@@ -111,10 +117,11 @@ fn main() -> ! {
 
     // Create sockets
     let mut dhcp_socket = dhcpv4::Socket::new();
-    dhcp_socket.set_retry_config(RetryConfig {
-        discover_timeout: Duration::from_secs(5),
-        ..RetryConfig::default()
-    });
+
+    let mut retry_config = RetryConfig::default();
+    retry_config.discover_timeout = Duration::from_secs(5);
+
+    dhcp_socket.set_retry_config(retry_config);
     // register hostname with dhcp
     dhcp_socket.set_outgoing_options(&[DhcpOption {
         kind: 12, // Host Name

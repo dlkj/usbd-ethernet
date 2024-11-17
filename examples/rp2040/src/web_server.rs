@@ -1,7 +1,7 @@
 use core::fmt::Write;
 use core::str::from_utf8;
 use defmt::debug;
-use embedded_hal::digital::v2::OutputPin;
+use embedded_hal::digital::OutputPin;
 use heapless::Vec;
 use smoltcp::{iface::SocketHandle, socket::tcp::Socket};
 
