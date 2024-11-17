@@ -2,7 +2,6 @@
 
 use super::buffer::RWBuffer;
 use super::bytes::{Buf, BufMut};
-use defmt::{debug, error, info, warn, Format};
 use heapless::String;
 use smoltcp::phy::{self, Device, DeviceCapabilities, Medium};
 #[allow(clippy::wildcard_imports)]
@@ -37,7 +36,8 @@ const SIG_NDP_WITH_FCS: &[u8; 4] = b"NCM1";
 
 const REQ_TYPE_DEVICE_TO_HOST: u8 = 0xA1;
 
-#[derive(Format, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum DeviceState {
     Disabled,
     Disconnected,
@@ -56,7 +56,8 @@ enum HostNotification {
     Speed(Speed),
 }
 
-#[derive(Format, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct Speed {
     pub upload_bit_rate: u32,
     pub download_bit_rate: u32,
@@ -131,7 +132,8 @@ impl<'a, B: UsbBus> Ethernet<'a, B> {
         const NOTE_TYPE_NETWORK_CONNECTION: u8 = 0x00;
 
         if self.state == DeviceState::Disabled {
-            warn!("ethernet: device can't change connection state while disabled",);
+            #[cfg(feature = "defmt")]
+            defmt::warn!("ethernet: device can't change connection state while disabled",);
             return Err(UsbError::WouldBlock);
         }
 
@@ -150,10 +152,12 @@ impl<'a, B: UsbBus> Ethernet<'a, B> {
         let result = self.comm_ep.write(&data);
 
         if result.is_ok() {
+            #[cfg(feature = "defmt")]
+            #[allow(clippy::if_same_then_else)]
             if connect {
-                debug!("ethernet: connecting");
+                defmt::debug!("ethernet: connecting");
             } else {
-                debug!("ethernet: disconnecting");
+                defmt::debug!("ethernet: disconnecting");
             }
             self.request_state = HostNotificationState::InProgress(HostNotification::Connect);
         }
@@ -169,7 +173,8 @@ impl<'a, B: UsbBus> Ethernet<'a, B> {
         const NOTE_TYPE_CONNECTION_SPEED_CHANGE: u8 = 0x2A;
 
         if self.state == DeviceState::Disabled {
-            warn!("ethernet: device can't set connection speed while disabled",);
+            #[cfg(feature = "defmt")]
+            defmt::warn!("ethernet: device can't set connection speed while disabled",);
             return Err(UsbError::WouldBlock);
         }
 
@@ -196,7 +201,8 @@ impl<'a, B: UsbBus> Ethernet<'a, B> {
                     upload_bit_rate,
                     download_bit_rate,
                 }));
-            debug!("ethernet: setting connection speed");
+            #[cfg(feature = "defmt")]
+            defmt::debug!("ethernet: setting connection speed");
         }
 
         result.map(drop)
@@ -271,14 +277,14 @@ impl<'a, B: UsbBus> InBuf<'a, B> {
             .write(len.into(), |buf| Ok((len.into(), f(buf))))?;
 
         match self.write_packet() {
-            Err(UsbError::WouldBlock) | Ok(_) => Ok(result),
+            Err(UsbError::WouldBlock) | Ok(()) => Ok(result),
             Err(e) => Err(e),
         }
     }
 
     fn can_write(&mut self) -> bool {
         match self.write_packet() {
-            Ok(_) => self.buffer.is_empty(),
+            Ok(()) => self.buffer.is_empty(),
             Err(_) => false,
         }
     }
@@ -342,7 +348,7 @@ impl<'a, B: UsbBus> InBuf<'a, B> {
 impl<'a, B: UsbBus> OutBuf<'a, B> {
     fn can_read(&mut self) -> bool {
         match self.read_packet() {
-            Ok(_) => self.datagram_len.is_some(),
+            Ok(()) => self.datagram_len.is_some(),
             Err(_) => false,
         }
     }
@@ -367,7 +373,7 @@ impl<'a, B: UsbBus> OutBuf<'a, B> {
         self.buffer.clear();
 
         match self.read_packet() {
-            Err(UsbError::WouldBlock) | Ok(_) => Ok(result),
+            Err(UsbError::WouldBlock) | Ok(()) => Ok(result),
             Err(e) => Err(e),
         }
     }
@@ -381,7 +387,7 @@ impl<'a, B: UsbBus> OutBuf<'a, B> {
             return Ok(());
         }
 
-        let (read, _) = self
+        let (read, ()) = self
             .buffer
             .write(self.read_ep.max_packet_size().into(), |data| {
                 Ok((self.read_ep.read(data)?, ()))
@@ -396,14 +402,15 @@ impl<'a, B: UsbBus> OutBuf<'a, B> {
             let mut data: &[u8] = data;
             let sig = data.get_slice(4);
             if sig != SIG_NTH {
-                warn!("ethernet: received bad NTH sig.");
+                #[cfg(feature = "defmt")]
+                defmt::warn!("ethernet: received bad NTH sig.");
                 return Err(UsbError::ParseError);
             }
 
             data.advance(6); // wHeaderLength, wSequence, wBlockLength
-            let Some(ndp_idx) = data.get_u16_le().map(usize::from)
-            else{
-                warn!("ethernet: NTH too short, unable to read ndp_idx");
+            let Some(ndp_idx) = data.get_u16_le().map(usize::from) else {
+                #[cfg(feature = "defmt")]
+                defmt::warn!("ethernet: NTH too short, unable to read ndp_idx");
                 return Err(UsbError::ParseError);
             };
             assert!(!data.has_remaining());
@@ -411,7 +418,8 @@ impl<'a, B: UsbBus> OutBuf<'a, B> {
         }) {
             Ok((_, ndp_offset)) => ndp_offset,
             Err(UsbError::InvalidState) => {
-                error!("ntb: read NTB header too short NTB");
+                #[cfg(feature = "defmt")]
+                defmt::error!("ntb: read NTB header too short NTB");
                 self.buffer.clear();
                 return Err(UsbError::ParseError);
             }
@@ -424,35 +432,37 @@ impl<'a, B: UsbBus> OutBuf<'a, B> {
         // Process NTB Datagram Pointer
 
         match self.buffer.read(self.buffer.unread(), |data| {
-            let Some(mut ntb_datagram_pointer) = data.get(ndp_offset..ndp_offset + NDP_LEN)
-            else {
-                    warn!("ethernet: NTB datagram pointer out of range or truncated");
-                    return Err(UsbError::ParseError);
+            let Some(mut ntb_datagram_pointer) = data.get(ndp_offset..ndp_offset + NDP_LEN) else {
+                #[cfg(feature = "defmt")]
+                defmt::warn!("ethernet: NTB datagram pointer out of range or truncated");
+                return Err(UsbError::ParseError);
             };
 
             // wdSignature
             let sig = ntb_datagram_pointer.get_slice(4);
             if sig != SIG_NDP_NO_FCS && sig != SIG_NDP_WITH_FCS {
-                warn!("ethernet: received bad NDP sig");
+                #[cfg(feature = "defmt")]
+                defmt::warn!("ethernet: received bad NDP sig");
                 return Err(UsbError::ParseError);
             }
 
             ntb_datagram_pointer.advance(4); // wLength, reserved
 
-            let Some(datagram_index) = ntb_datagram_pointer.get_u16_le().map(usize::from)
-            else{
-                warn!("ethernet: NTB too short, unable to read datagram_index");
+            let Some(datagram_index) = ntb_datagram_pointer.get_u16_le().map(usize::from) else {
+                #[cfg(feature = "defmt")]
+                defmt::warn!("ethernet: NTB too short, unable to read datagram_index");
                 return Err(UsbError::ParseError);
             };
-            let Some(datagram_len) = ntb_datagram_pointer.get_u16_le().map(usize::from)
-            else{
-                warn!("ethernet: NTB too short, unable to read datagram_len");
+            let Some(datagram_len) = ntb_datagram_pointer.get_u16_le().map(usize::from) else {
+                #[cfg(feature = "defmt")]
+                defmt::warn!("ethernet: NTB too short, unable to read datagram_len");
                 return Err(UsbError::ParseError);
             };
 
             if datagram_index == 0 || datagram_len == 0 {
                 // empty, ignore. This is allowed by the spec, so don't warn.
-                debug!("ethernet: empty datagram");
+                #[cfg(feature = "defmt")]
+                defmt::debug!("ethernet: empty datagram");
                 return Err(UsbError::WouldBlock);
             }
 
@@ -462,7 +472,8 @@ impl<'a, B: UsbBus> OutBuf<'a, B> {
                 .get(datagram_offset..datagram_offset + datagram_len)
                 .is_none()
             {
-                warn!("ethernet: NDP datagram pointer out of range");
+                #[cfg(feature = "defmt")]
+                defmt::warn!("ethernet: NDP datagram pointer out of range");
                 return Err(UsbError::ParseError);
             };
 
@@ -592,7 +603,8 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
         writer.endpoint(&self.in_buf.write_ep)?;
         writer.endpoint(&self.out_buf.read_ep)?;
 
-        debug!("ethernet: configuration descriptors written");
+        #[cfg(feature = "defmt")]
+        defmt::debug!("ethernet: configuration descriptors written");
 
         Ok(())
     }
@@ -609,24 +621,30 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
         }
 
         if req.index == u16::from(u8::from(self.data_if)) {
-            warn!(
+            #[cfg(feature = "defmt")]
+            defmt::warn!(
                 "ethernet: unhandled DATA_INTERFACE control_in {} {}",
-                req.request_type, req.request
+                req.request_type,
+                req.request
             );
             return;
         }
 
         if req.index != u16::from(u8::from(self.comm_if)) {
-            warn!(
+            #[cfg(feature = "defmt")]
+            defmt::warn!(
                 "ethernet: control_in unexpected interface {} - {} {}",
-                req.index, req.request_type, req.request
+                req.index,
+                req.request_type,
+                req.request
             );
             return;
         }
 
         match (req.request_type, req.request) {
             (control::RequestType::Class, REQ_GET_NTB_PARAMETERS) => {
-                debug!("ethernet: REQ_GET_NTB_PARAMETERS");
+                #[cfg(feature = "defmt")]
+                defmt::debug!("ethernet: REQ_GET_NTB_PARAMETERS");
                 let _: Result<()> = transfer.accept(|data| {
                     const LEN: u16 = 28;
                     if let Some(mut data) = data.get_mut(..LEN.into()) {
@@ -650,7 +668,8 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
                 });
             }
             (control::RequestType::Class, REQ_GET_NTB_INPUT_SIZE) => {
-                debug!("ethernet: REQ_GET_NTB_INPUT_SIZE");
+                #[cfg(feature = "defmt")]
+                defmt::debug!("ethernet: REQ_GET_NTB_INPUT_SIZE");
                 let _: Result<()> = transfer.accept(|data| {
                     const LEN: usize = 4;
 
@@ -665,9 +684,11 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
                 });
             }
             _ => {
-                warn!(
+                #[cfg(feature = "defmt")]
+                defmt::warn!(
                     "ethernet: unhandled COMMUNICATION interface control_in {} {}",
-                    req.request_type, req.request
+                    req.request_type,
+                    req.request
                 );
             }
         }
@@ -685,65 +706,78 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
         }
 
         if req.index == u16::from(u8::from(self.comm_if)) {
-            match (req.request_type, req.request) {
-                (control::RequestType::Class, REQ_SET_NTB_INPUT_SIZE) => {
-                    debug!("ethernet: REQ_SET_NTB_INPUT_SIZE");
-                    // We only support the minimum NTB maximum size the value
-                    // will always be NTB_MAX_SIZE
-                    if let Some(ntb_input_size) = transfer.data().get_u32_le() {
-                        if ntb_input_size != NTB_MAX_SIZE {
-                            warn!(
-                                "ncp: unexpected REQ_SET_NTB_INPUT_SIZE data {}",
-                                transfer.data()
-                            );
-                        }
-                    } else {
-                        warn!("ncp: unexpected REQ_SET_NTB_INPUT_SIZE data too short");
-                    };
+            if let (control::RequestType::Class, REQ_SET_NTB_INPUT_SIZE) =
+                (req.request_type, req.request)
+            {
+                #[cfg(feature = "defmt")]
+                defmt::debug!("ethernet: REQ_SET_NTB_INPUT_SIZE");
+                // We only support the minimum NTB maximum size the value
+                // will always be NTB_MAX_SIZE
+                if let Some(ntb_input_size) = transfer.data().get_u32_le() {
+                    if ntb_input_size != NTB_MAX_SIZE {
+                        #[cfg(feature = "defmt")]
+                        defmt::warn!(
+                            "ncp: unexpected REQ_SET_NTB_INPUT_SIZE data {}",
+                            transfer.data()
+                        );
+                    }
+                } else {
+                    #[cfg(feature = "defmt")]
+                    defmt::warn!("ncp: unexpected REQ_SET_NTB_INPUT_SIZE data too short");
+                };
 
-                    let _: Result<()> = transfer.accept();
-                }
-                _ => {
-                    warn!(
-                        "ethernet: unhandled COMMUNICATION interface control_out {} {}",
-                        req.request_type, req.request
-                    );
-                }
+                let _: Result<()> = transfer.accept();
+            } else {
+                #[cfg(feature = "defmt")]
+                defmt::warn!(
+                    "ethernet: unhandled COMMUNICATION interface control_out {} {}",
+                    req.request_type,
+                    req.request
+                );
             }
             return;
         }
 
         if req.index == u16::from(u8::from(self.data_if)) {
-            match (req.request_type, req.request) {
-                (control::RequestType::Standard, REQ_SET_INTERFACE) => {
-                    debug!("ethernet: REQ_SET_INTERFACE");
-                    if req.value == 0 {
-                        transfer.accept().ok();
-                        self.state = DeviceState::Disabled;
-                        info!("ethernet: data interface disabled");
-                        self.reset();
-                    } else if req.value == 1 {
-                        info!("ethernet: data interface enabled");
-                        self.state = DeviceState::Disconnected;
-                        transfer.accept().ok();
-                    } else {
-                        warn!("SET_INTERFACE out of range {}", req.request);
-                        transfer.reject().ok();
-                    }
+            if let (control::RequestType::Standard, REQ_SET_INTERFACE) =
+                (req.request_type, req.request)
+            {
+                #[cfg(feature = "defmt")]
+                defmt::debug!("ethernet: REQ_SET_INTERFACE");
+                if req.value == 0 {
+                    transfer.accept().ok();
+                    self.state = DeviceState::Disabled;
+                    #[cfg(feature = "defmt")]
+                    defmt::info!("ethernet: data interface disabled");
+                    self.reset();
+                } else if req.value == 1 {
+                    #[cfg(feature = "defmt")]
+                    defmt::info!("ethernet: data interface enabled");
+                    self.state = DeviceState::Disconnected;
+                    transfer.accept().ok();
+                } else {
+                    #[cfg(feature = "defmt")]
+                    defmt::warn!("SET_INTERFACE out of range {}", req.request);
+                    transfer.reject().ok();
                 }
-                _ => {
-                    warn!(
-                        "ethernet: unhandled DATA_INTERFACE control_out {} {}",
-                        req.request_type, req.request
-                    );
-                }
+            } else {
+                #[cfg(feature = "defmt")]
+                defmt::warn!(
+                    "ethernet: unhandled DATA_INTERFACE control_out {} {}",
+                    req.request_type,
+                    req.request
+                );
             }
+            #[allow(clippy::needless_return)]
             return;
         }
 
-        warn!(
+        #[cfg(feature = "defmt")]
+        defmt::warn!(
             "ethernet: control_out unexpected interface {} - {} {}",
-            req.index, req.request_type, req.request
+            req.index,
+            req.request_type,
+            req.request
         );
     }
 
@@ -754,18 +788,22 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
 
         match self.request_state {
             HostNotificationState::Complete => {
-                warn!("ethernet: endpoint in completed when no request was in progress");
+                #[cfg(feature = "defmt")]
+                defmt::warn!("ethernet: endpoint in completed when no request was in progress");
             }
             HostNotificationState::InProgress(HostNotification::Connect) => {
-                info!("ethernet: connected");
+                #[cfg(feature = "defmt")]
+                defmt::info!("ethernet: connected");
                 self.state = DeviceState::Connected;
             }
             HostNotificationState::InProgress(HostNotification::Disconnect) => {
-                info!("ethernet: disconnected");
+                #[cfg(feature = "defmt")]
+                defmt::info!("ethernet: disconnected");
                 self.state = DeviceState::Disconnected;
             }
             HostNotificationState::InProgress(HostNotification::Speed(cs)) => {
-                info!("ethernet: connection speed set");
+                #[cfg(feature = "defmt")]
+                defmt::info!("ethernet: connection speed set");
                 self.connection_speed = Some(cs);
             }
         }
@@ -776,13 +814,15 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
         if index == self.mac_address_idx {
             Some(&self.mac_address)
         } else {
-            warn!("ethernet: unknown string index requested {}", index);
+            #[cfg(feature = "defmt")]
+            defmt::warn!("ethernet: unknown string index requested {}", index);
             None
         }
     }
 
     fn reset(&mut self) {
-        info!("ethernet: reset");
+        #[cfg(feature = "defmt")]
+        defmt::info!("ethernet: reset");
         self.in_buf.reset();
         self.out_buf.reset();
         self.state = DeviceState::Disabled;

@@ -1,0 +1,38 @@
+on: [push, pull_request]
+
+name: Lib build
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check_format_build:
+    name: Lib - Check, Format, Build
+    runs-on: ubuntu-latest
+    steps:
+      #Checkout source
+      - name: Checkout sources
+        uses: actions/checkout@v4
+      #toolchain and tools
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      #build and lint
+      - name: Run cargo check
+        run: cargo check
+      - name: Run cargo fmt
+        run: cargo fmt --all -- --check
+      - name: Run cargo clippy
+        run: cargo clippy -- -D warnings
+      - name: Run cargo clippy with defmt
+        run: cargo clippy --features defmt -- -D warnings
+      - name: Run cargo clippy on tests
+        run: cargo clippy --tests -- -D warnings
+      - name: Run cargo test
+        run: cargo test
+      - name: Run cargo build
+        run: cargo build
+      - name: Run cargo build with defmt
+        run: cargo build --features defmt

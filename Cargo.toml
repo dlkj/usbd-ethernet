@@ -17,6 +17,9 @@ smoltcp = { version = "0.9", default-features = false, features = [
     "medium-ethernet",
     "socket-udp",
 ] }
-defmt = "0.3"
+defmt = { version = "0.3", optional = true }
 heapless = { version = "0.7", features = ["defmt-impl"] }
 usb-device = { version = "0.2", features = ["defmt"] }
+
+[features]
+defmt = ["dep:defmt", "usb-device/defmt"]

@@ -1,4 +1,3 @@
-use defmt::error;
 // TODO remove usb stuff from this mod
 use usb_device::Result;
 use usb_device::UsbError;
@@ -44,14 +43,15 @@ impl<'a, const LEN: usize> RWBuffer<'a, LEN> {
         len: usize,
         f: impl FnOnce(&mut [u8]) -> Result<(usize, R)>,
     ) -> Result<(usize, R)> {
-        let Some(buf) = self.store.get_mut(self.write_ptr .. self.write_ptr + len)
-        else{
-            error!("buffer: tried to write more data than capacity");
+        let Some(buf) = self.store.get_mut(self.write_ptr..self.write_ptr + len) else {
+            #[cfg(feature = "defmt")]
+            defmt::error!("buffer: tried to write more data than capacity");
             return Err(UsbError::BufferOverflow);
         };
         let (written, r) = f(buf)?;
         if written > len {
-            error!("buffer: claim to have written more data than allocated");
+            #[cfg(feature = "defmt")]
+            defmt::error!("buffer: claim to have written more data than allocated");
             return Err(UsbError::BufferOverflow);
         }
         self.write_ptr += written;
@@ -68,18 +68,16 @@ impl<'a, const LEN: usize> RWBuffer<'a, LEN> {
         len: usize,
         f: impl FnOnce(&mut [u8]) -> Result<(usize, R)>,
     ) -> Result<(usize, R)> {
-        let Some(buf) = self
-            .store
-            .get_mut(self.read_ptr..self.read_ptr + len)
-            else
-            {
-                error!("buffer: tried to read more data than available");
-                return Err(UsbError::InvalidState);
-            };
+        let Some(buf) = self.store.get_mut(self.read_ptr..self.read_ptr + len) else {
+            #[cfg(feature = "defmt")]
+            defmt::error!("buffer: tried to read more data than available");
+            return Err(UsbError::InvalidState);
+        };
 
         let (read, r) = f(buf)?;
         if read > len {
-            error!("buffer: claim to have read more data than allocated");
+            #[cfg(feature = "defmt")]
+            defmt::error!("buffer: claim to have read more data than allocated");
             return Err(UsbError::BufferOverflow);
         }
         self.read_ptr += read;
