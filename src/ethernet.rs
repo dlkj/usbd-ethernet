@@ -504,6 +504,7 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
         const CDC_PROTOCOL_NTB: u8 = 0x01;
         const CDC_SUBCLASS_NCM: u8 = 0x0d;
         const CDC_TYPE_ETHERNET: u8 = 0x0F;
+        const CDC_TYPE_UNION: u8 = 0x06;
         const CDC_TYPE_HEADER: u8 = 0x00;
         const CDC_TYPE_NCM: u8 = 0x1A;
         const CS_INTERFACE: u8 = 0x24;
@@ -535,6 +536,19 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
             if let Some(mut buf) = buf.get_mut(..LEN) {
                 buf.put_u8(CDC_TYPE_HEADER); // bDescriptorSubtype
                 buf.put_u16_le(0x0120); // bcdCDC (1.20)
+                assert!(!buf.has_remaining_mut());
+                Ok(LEN)
+            } else {
+                Err(UsbError::BufferOverflow)
+            }
+        })?;
+
+        writer.write_with(CS_INTERFACE, |buf| {
+            const LEN: usize = 3;
+            if let Some(mut buf) = buf.get_mut(..LEN) {
+                buf.put_u8(CDC_TYPE_UNION); // bDescriptorSubtype
+                buf.put_u8(u8::from(self.comm_if)); // bControlInterface
+                buf.put_u8(u8::from(self.data_if)); // bSubordinateInterface0
                 assert!(!buf.has_remaining_mut());
                 Ok(LEN)
             } else {
