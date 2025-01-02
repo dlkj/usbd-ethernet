@@ -15,6 +15,7 @@ use hal::{clocks::init_clocks_and_plls, pac, watchdog::Watchdog};
 use heapless::Vec;
 use panic_probe as _;
 use rp_pico as bsp;
+use smoltcp::iface::PollResult;
 use smoltcp::socket::dhcpv4::RetryConfig;
 use smoltcp::time::Duration;
 use smoltcp::wire::DhcpOption;
@@ -148,7 +149,9 @@ fn main() -> ! {
             let timestamp =
                 Instant::from_micros(i64::try_from(timer.get_counter().ticks()).unwrap());
 
-            if interface.poll(timestamp, &mut ethernet, &mut sockets) {
+            if let PollResult::SocketStateChanged =
+                interface.poll(timestamp, &mut ethernet, &mut sockets)
+            {
                 dhcp_poll(
                     &mut interface,
                     sockets.get_mut::<dhcpv4::Socket>(dhcp_handle),
