@@ -355,7 +355,7 @@ impl<B: UsbBus> OutBuf<'_, B> {
 
     fn read_datagram<R, F>(&mut self, f: F) -> Result<R>
     where
-        F: FnOnce(&mut [u8]) -> R,
+        F: FnOnce(&[u8]) -> R,
     {
         if !self.can_read() {
             return Err(UsbError::WouldBlock);
@@ -902,7 +902,7 @@ impl<'a, 'b, B: UsbBus> EthernetRxToken<'a, 'b, B> {
 impl<B: UsbBus> phy::RxToken for EthernetRxToken<'_, '_, B> {
     fn consume<R, F>(self, f: F) -> R
     where
-        F: FnOnce(&mut [u8]) -> R,
+        F: FnOnce(&[u8]) -> R,
     {
         self.ethernet.read_datagram(f).unwrap()
     }
