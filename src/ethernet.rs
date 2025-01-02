@@ -833,10 +833,14 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
 }
 
 impl<'a, B: UsbBus> Device for Ethernet<'a, B> {
-    type RxToken<'b> = EthernetRxToken<'a, 'b, B> where
-    Self: 'b;
-    type TxToken<'b> = EthernetTxToken<'a, 'b, B> where
-    Self: 'b;
+    type RxToken<'b>
+        = EthernetRxToken<'a, 'b, B>
+    where
+        Self: 'b;
+    type TxToken<'b>
+        = EthernetTxToken<'a, 'b, B>
+    where
+        Self: 'b;
 
     fn receive(
         &mut self,
