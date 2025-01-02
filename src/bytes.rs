@@ -21,6 +21,7 @@ pub(crate) trait BufMut {
     }
 }
 
+#[allow(dead_code)]
 pub(crate) trait Buf {
     fn remaining(&self) -> usize;
     fn has_remaining(&self) -> bool {
