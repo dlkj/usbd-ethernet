@@ -232,7 +232,7 @@ fn mac_bytes_to_string(mac_address: [u8; 6]) -> String<12> {
     }
     s
 }
-impl<'a, B: UsbBus> InBuf<'a, B> {
+impl<B: UsbBus> InBuf<'_, B> {
     /// Writes a single packet into the IN endpoint.
     pub fn write_datagram<F, R>(&mut self, len: u16, f: F) -> Result<R>
     where
@@ -345,7 +345,7 @@ impl<'a, B: UsbBus> InBuf<'a, B> {
     }
 }
 
-impl<'a, B: UsbBus> OutBuf<'a, B> {
+impl<B: UsbBus> OutBuf<'_, B> {
     fn can_read(&mut self) -> bool {
         match self.read_packet() {
             Ok(()) => self.datagram_len.is_some(),
@@ -885,7 +885,7 @@ impl<'a, 'b, B: UsbBus> EthernetRxToken<'a, 'b, B> {
     }
 }
 
-impl<'a, 'b, B: UsbBus> phy::RxToken for EthernetRxToken<'a, 'b, B> {
+impl<B: UsbBus> phy::RxToken for EthernetRxToken<'_, '_, B> {
     fn consume<R, F>(self, f: F) -> R
     where
         F: FnOnce(&mut [u8]) -> R,
@@ -903,7 +903,7 @@ impl<'a, 'b, B: UsbBus> EthernetTxToken<'a, 'b, B> {
     }
 }
 
-impl<'a, 'b, B: UsbBus> phy::TxToken for EthernetTxToken<'a, 'b, B> {
+impl<B: UsbBus> phy::TxToken for EthernetTxToken<'_, '_, B> {
     fn consume<R, F>(self, len: usize, f: F) -> R
     where
         F: FnOnce(&mut [u8]) -> R,
