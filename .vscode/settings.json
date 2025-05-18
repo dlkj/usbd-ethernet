@@ -1,6 +1,7 @@
 {
-  "rust-analyzer.linkedProjects": [".\\examples\\rp2040\\Cargo.toml"],
+  "rust-analyzer.linkedProjects": [
+    ".\\examples\\rp2040\\Cargo.toml"
+  ],
   "rust-analyzer.cargo.target": "thumbv6m-none-eabi",
-  "rust-analyzer.checkOnSave.allTargets": false,
   "editor.formatOnSave": true
 }
