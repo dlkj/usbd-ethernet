@@ -475,7 +475,7 @@ impl<B: UsbBus> OutBuf<'_, B> {
                 #[cfg(feature = "defmt")]
                 defmt::warn!("ethernet: NDP datagram pointer out of range");
                 return Err(UsbError::ParseError);
-            };
+            }
 
             // mark all data up to the datagram_offset as read
             Ok((datagram_offset, datagram_len))
@@ -487,7 +487,7 @@ impl<B: UsbBus> OutBuf<'_, B> {
                 self.buffer.clear();
                 return Err(e);
             }
-        };
+        }
 
         Ok(())
     }
@@ -739,7 +739,7 @@ impl<B: UsbBus> UsbClass<B> for Ethernet<'_, B> {
                 } else {
                     #[cfg(feature = "defmt")]
                     defmt::warn!("ncp: unexpected REQ_SET_NTB_INPUT_SIZE data too short");
-                };
+                }
 
                 let _: Result<()> = transfer.accept();
             } else {
