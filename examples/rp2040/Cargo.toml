@@ -18,7 +18,7 @@ defmt = "1.0"
 defmt-rtt = "1.0"
 panic-probe = { version = "1.0", features = ["print-defmt"] }
 
-smoltcp = { version = "0.12", default-features = false, features = [
+smoltcp = { version = "0.13", default-features = false, features = [
     "defmt",
     "socket-tcp",
     "socket-dhcpv4",
